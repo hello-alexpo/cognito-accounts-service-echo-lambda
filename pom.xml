@@ -70,6 +70,7 @@
                             <descriptors>
                                 <descriptor>src/assembly/lambda_deployment.xml</descriptor>
                             </descriptors>
+                            <outputDirectory>${project.build.directory}/out</outputDirectory>
                         </configuration>
                     </execution>
                 </executions>
@@ -78,6 +79,20 @@
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>wagon-maven-plugin</artifactId>
                 <version>1.0</version>
+                <executions>
+                    <execution>
+                        <id>deploy-release</id>
+                        <phase>deploy</phase>
+                        <goals>
+                            <goal>upload</goal>
+                        </goals>
+                        <configuration>
+                            <serverId>aws-snapshot-dev</serverId>
+                            <url>${aws-snapshot-dev.bucket}</url>
+                            <fromDir>${project.build.directory}/out</fromDir>
+                        </configuration>
+                    </execution>
+                </executions>
             </plugin>
         </plugins>
         <extensions>
