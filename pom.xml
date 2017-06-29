@@ -3,19 +3,17 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
+    <groupId>com.workingbit</groupId>
     <artifactId>echo</artifactId>
+    <version>0.0.1-SNAPSHOT</version>
     <packaging>jar</packaging>
 
     <name>echo</name>
     <description>Demo project for Spring Boot</description>
 
-    <parent>
-        <groupId>com.workingbit</groupId>
-        <artifactId>microservices</artifactId>
-        <version>0.0.1-SNAPSHOT</version>
-    </parent>
-
     <properties>
+        <aws-snapshot-dev.bucket>s3://com.workingbit.lambda-functions-dev-eu-west-1/snapshot/</aws-snapshot-dev.bucket>
+
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
         <java.version>1.8</java.version>
