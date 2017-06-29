@@ -51,11 +51,11 @@
     </dependencies>
 
     <build>
-        <finalName>echo</finalName>
         <plugins>
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
+                <version>1.5.4.RELEASE</version>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -67,20 +67,28 @@
                         <goals>
                             <goal>single</goal>
                         </goals>
-                        <!--<phase>package</phase>-->
+                        <phase>package</phase>
                         <configuration>
                             <descriptors>
                                 <descriptor>src/assembly/lambda_deployment.xml</descriptor>
                             </descriptors>
-                            <appendAssemblyId>false</appendAssemblyId>
-                            <descriptorRefs>
-                                <descriptorRef>assembly</descriptorRef>
-                            </descriptorRefs>
                         </configuration>
                     </execution>
                 </executions>
             </plugin>
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>wagon-maven-plugin</artifactId>
+                <version>1.0</version>
+            </plugin>
         </plugins>
+        <extensions>
+            <extension>
+                <groupId>org.kuali.maven.wagons</groupId>
+                <artifactId>maven-s3-wagon</artifactId>
+                <version>1.2.1</version>
+            </extension>
+        </extensions>
         <!--<extensions>-->
             <!--<extension>-->
                 <!--<groupId>org.springframework.build</groupId>-->
@@ -102,11 +110,11 @@
         </dependencies>
     </dependencyManagement>
 
-    <!--<distributionManagement>-->
-        <!--<snapshotRepository>-->
-            <!--<id>aws-snapshot-dev</id>-->
-            <!--<name>AWS Snapshot Repository</name>-->
-            <!--<url>${aws-snapshot-dev.bucket}</url>-->
-        <!--</snapshotRepository>-->
-    <!--</distributionManagement>-->
+    <distributionManagement>
+        <snapshotRepository>
+            <id>aws-snapshot-dev</id>
+            <name>AWS Snapshot Repository</name>
+            <url>${aws-snapshot-dev.bucket}</url>
+        </snapshotRepository>
+    </distributionManagement>
 </project>
