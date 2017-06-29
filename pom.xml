@@ -51,6 +51,7 @@
     </dependencies>
 
     <build>
+        <finalName>echo</finalName>
         <plugins>
             <plugin>
                 <groupId>org.springframework.boot</groupId>
@@ -71,6 +72,10 @@
                             <descriptors>
                                 <descriptor>src/assembly/lambda_deployment.xml</descriptor>
                             </descriptors>
+                            <appendAssemblyId>false</appendAssemblyId>
+                            <descriptorRefs>
+                                <descriptorRef>assembly</descriptorRef>
+                            </descriptorRefs>
                         </configuration>
                     </execution>
                 </executions>
