@@ -22,6 +22,11 @@ public class LambdaHandler implements RequestHandler<AwsProxyRequest, AwsProxyRe
   }
 
   public AwsProxyResponse handleRequest(AwsProxyRequest awsProxyRequest, Context context) {
+    if (null == awsProxyRequest) {
+      AwsProxyResponse awsProxyResponse = new AwsProxyResponse();
+      awsProxyResponse.setBody("null");
+      return awsProxyResponse;
+    }
     return getHandler().proxy(awsProxyRequest, context);
   }
 
