@@ -18,6 +18,6 @@ public class EchoController {
 
   @GetMapping(value = "/echo")
   public String echo(@RequestParam("echo") String echo) {
-    return echo;
+    return "echo" + echo;
   }
 }
