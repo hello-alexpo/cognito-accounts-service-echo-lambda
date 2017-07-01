@@ -235,6 +235,8 @@ Resources:
         - Arn
       Action: 'lambda:InvokeFunction'
       Principal: apigateway.amazonaws.com
+  LambdaReviewSNSTopic:
+    Type: 'AWS::SNS::Topic'
   CodePipelineStack:
     Type: 'AWS::CodePipeline::Pipeline'
     DependsOn:
@@ -261,19 +263,28 @@ Resources:
                 S3Bucket: !Ref S3Bucket
                 S3ObjectKey: !Ref S3Key
               RunOrder: 1
-        - Name: Commit
+        - Name: Aproval
           Actions:
             - InputArtifacts: []
-              Name: IAMPermissions
+              Name: LambdaApproval
               ActionTypeId:
-                Category: Invoke
+                Category: Approval
                 Owner: AWS
                 Version: '1'
-                Provider: Lambda
+                Provider: Manual
               OutputArtifacts: []
               Configuration:
-                FunctionName: !Ref BackingLambdaFunction
-                UserParameters: !Ref 'AWS::StackName'
+                NotificationArn: !Ref LambdaReviewSNSTopic
+                ExternalEntityLink: !Join
+                  - ''
+                  - - 'https://'
+                    - !Ref MainAPI
+                    - '.execute-api.'
+                    - !Ref 'AWS::Region'
+                    - '.amazonaws.com/'
+                    - !Ref APIStageName
+                    - '/test/echo'
+                CustomData: 'Review Lambda'
               RunOrder: 1
       ArtifactStore:
         Type: S3
@@ -319,7 +330,7 @@ Resources:
 #          - x-another-header
 #        maxAge: 1800
   APIMethodGet:
-    Type: AWS::ApiGateway::Method
+    Type: 'AWS::ApiGateway::Method'
     Properties:
       ApiKeyRequired: false
       HttpMethod: GET
@@ -340,7 +351,7 @@ Resources:
                     - !Ref APIName
                 - invocations
         IntegrationHttpMethod: POST
-        PassthroughBehavior: WHEN_NO_MATCH
+#        PassthroughBehavior: WHEN_NO_MATCH
         Type: AWS_PROXY
   DeployApi:
     Type: 'Custom::ApiDeploy'
