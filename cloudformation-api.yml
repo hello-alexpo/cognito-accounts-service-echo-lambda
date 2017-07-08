@@ -44,7 +44,8 @@ Parameters:
       https://apigatewaycloudformation.bynordenfelt.com/). Example:
       arn:aws:lambda:us-east-1:123456789012:function:APIGatewayCustomResource-LambdaFunction-ABCDEFG123
     Type: String
-    Default: arn:aws:lambda:eu-west-1:089753065094:function:ApiGatewayCloudFormationStack-LambdaFunction-SW85819GZZLN
+    Default: >-
+      arn:aws:lambda:eu-west-1:089753065094:function:ApiGatewayCloudFormationStack-LambdaFunction-SW85819GZZLN
   DynamoReadCapacityUnits:
     Description: Provisioned read throughput
     Type: Number
@@ -91,7 +92,7 @@ Resources:
         - '-'
         - - !Ref 'AWS::StackName'
           - !Ref APIName
-      Handler: com.workingbit.echo.LambdaHandler::handleRequest
+      Handler: 'com.workingbit.echo.LambdaHandler::handleRequest'
       MemorySize: 256
       Role: !GetAtt
         - BackingLambdaExecutionRole
@@ -157,17 +158,17 @@ Resources:
           - !Ref APIName
       Description: !Ref APIDescription
   MainAPIResource:
-    Type: AWS::ApiGateway::Resource
+    Type: 'AWS::ApiGateway::Resource'
     Properties:
-      PathPart: 'test'
+      PathPart: test
       ParentId: !GetAtt
         - MainAPI
         - RootResourceId
       RestApiId: !Ref MainAPI
   EchoAPIResource:
-    Type: AWS::ApiGateway::Resource
+    Type: 'AWS::ApiGateway::Resource'
     Properties:
-      PathPart: 'echo'
+      PathPart: echo
       ParentId: !Ref MainAPIResource
       RestApiId: !Ref MainAPI
   APIMethodGet:
@@ -197,7 +198,6 @@ Resources:
                     - !Ref APIName
                 - invocations
         IntegrationHttpMethod: POST
-#        PassthroughBehavior: WHEN_NO_MATCH
         Type: AWS_PROXY
   DeployApi:
     Type: 'Custom::ApiDeploy'
@@ -207,8 +207,6 @@ Resources:
       ServiceToken: !Ref APIGatewayCustomResourceARN
       restApiId: !Ref MainAPI
       stageName: !Ref APIStageName
-#      stageConfig:
-#        cacheClusterEnabled: false
       methodSettings: {}
       stageVariables:
         testVar1: testValue1
@@ -225,7 +223,272 @@ Resources:
       ProvisionedThroughput:
         ReadCapacityUnits: !Ref DynamoReadCapacityUnits
         WriteCapacityUnits: !Ref DynamoWriteCapacityUnits
-Outputs:
+  CFNPipelinePolicy:
+    Type: 'AWS::IAM::ManagedPolicy'
+    Properties:
+      Description: CloudFormation Pipeline Execution Policy
+      Path: /
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          Effect: Allow
+          Action:
+            - 'cloudformation:CreateStack'
+            - 'cloudformation:DescribeStacks'
+            - 'cloudformation:DeleteStack'
+            - 'cloudformation:UpdateStack'
+            - 'cloudformation:CreateChangeSet'
+            - 'cloudformation:ExecuteChangeSet'
+            - 'cloudformation:DeleteChangeSet'
+            - 'cloudformation:DescribeChangeSet'
+            - 'cloudformation:SetStackPolicy'
+            - 'cloudformation:SetStackPolicy'
+            - 'cloudformation:ValidateTemplate'
+            - 'codebuild:StartBuild'
+            - 'codebuild:BatchGetBuilds'
+          Resource: '*'
+  CloudFormationExecutionRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          Action:
+            - 'sts:AssumeRole'
+          Effect: Allow
+          Principal:
+            Service:
+              - cloudformation.amazonaws.com
+      Path: /
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/AdministratorAccess'
+  PipelineExecutionRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Action:
+              - 'sts:AssumeRole'
+            Effect: Allow
+            Principal:
+              Service:
+                - codepipeline.amazonaws.com
+      Path: /
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/AWSCodeCommitFullAccess'
+        - 'arn:aws:iam::aws:policy/AmazonS3FullAccess'
+        - !Ref CFNPipelinePolicy
+      Policies:
+        - PolicyName: CodePipelineAccess
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Action:
+                  - 'iam:PassRole'
+                  - 'lambda:InvokeFunction'
+                  - 'lambda:ListFunctions'
+                  - 'lambda:InvokeAsyc'
+                Effect: Allow
+                Resource: '*'
+  Pipeline:
+    Type: 'AWS::CodePipeline::Pipeline'
+    Properties:
+      ArtifactStore:
+        Location: !Ref LambdaCodeBucket
+        Type: S3
+      Name: !Sub '${ServiceName}_pipeline'
+      RoleArn: !GetAtt PipelineExecutionRole.Arn
+      Stages:
+        - Name: Source
+          Actions:
+            - Name: CodeCommitRepo
+              ActionTypeId:
+                Category: Source
+                Owner: AWS
+                Provider: CodeCommit
+                Version: 1
+              Configuration:
+                RepositoryName: !Sub '${ServiceName}_repo'
+                BranchName: master
+              OutputArtifacts:
+                - Name: SourceZip
+              RunOrder: 1
+        - Name: Build
+          Actions:
+            - Name: CodeBuild
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: 1
+              Configuration:
+                ProjectName: !Ref CodeBuildProject
+              InputArtifacts:
+                - Name: SourceZip
+              OutputArtifacts:
+                - Name: BuiltZip
+        - Name: DeployTests
+          Actions:
+            - Name: CreateChangeSet
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: CloudFormation
+                Version: 1
+              Configuration:
+                ActionMode: CHANGE_SET_REPLACE
+                RoleArn: !GetAtt CloudFormationExecutionRole.Arn
+                StackName: !Sub '${ServiceName}-Stack-Tests'
+                ChangeSetName: !Sub '${ServiceName}-ChangeSet-Tests'
+                TemplatePath: 'BuiltZip::test-output_sam.yaml'
+                Capabilities: CAPABILITY_IAM
+              InputArtifacts:
+                - Name: BuiltZip
+              OutputArtifacts:
+                - Name: TestChangeSet
+              RunOrder: 1
+            - Name: ExecuteChangeSet
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: CloudFormation
+                Version: 1
+              Configuration:
+                ActionMode: CHANGE_SET_EXECUTE
+                RoleArn: !GetAtt CloudFormationExecutionRole.Arn
+                StackName: !Sub '${ServiceName}-Stack-Tests'
+                ChangeSetName: !Sub '${ServiceName}-ChangeSet-Tests'
+              OutputArtifacts:
+                - Name: ExecutedTestChangeSet
+              RunOrder: 2
+        - Name: Beta
+          Actions:
+            - Name: CreateChangeSet
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: CloudFormation
+                Version: 1
+              Configuration:
+                ActionMode: CHANGE_SET_REPLACE
+                RoleArn: !GetAtt CloudFormationExecutionRole.Arn
+                StackName: !Sub '${ServiceName}-Stack-Beta'
+                ChangeSetName: !Sub '${ServiceName}-ChangeSet-Beta'
+                TemplatePath: 'BuiltZip::app-output_sam.yaml'
+                Capabilities: CAPABILITY_IAM
+              InputArtifacts:
+                - Name: BuiltZip
+              RunOrder: 1
+            - Name: ExecuteChangeSet
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: CloudFormation
+                Version: 1
+              Configuration:
+                ActionMode: CHANGE_SET_EXECUTE
+                RoleArn: !GetAtt CloudFormationExecutionRole.Arn
+                StackName: !Sub '${ServiceName}-Stack-Beta'
+                ChangeSetName: !Sub '${ServiceName}-ChangeSet-Beta'
+              OutputArtifacts:
+                - Name: !Sub '${ServiceName}BetaChangeSet'
+              RunOrder: 2
+            - Name: IntegrationTests
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref StartTestsFunction
+                UserParameters: !Sub '${ServiceName}-Stack-Beta|${ServiceName}-Stack-Tests|beta'
+              InputArtifacts:
+                - Name: !Sub '${ServiceName}BetaChangeSet'
+              RunOrder: 3
+        - Name: Gamma
+          Actions:
+            - Name: CreateChangeSet
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: CloudFormation
+                Version: 1
+              Configuration:
+                ActionMode: CHANGE_SET_REPLACE
+                RoleArn: !GetAtt CloudFormationExecutionRole.Arn
+                StackName: !Sub '${ServiceName}-Stack-Gamma'
+                ChangeSetName: !Sub '${ServiceName}-ChangeSet-Gamma'
+                TemplatePath: 'BuiltZip::app-output_sam.yaml'
+                Capabilities: CAPABILITY_IAM
+              InputArtifacts:
+                - Name: BuiltZip
+              RunOrder: 1
+            - Name: ExecuteChangeSet
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: CloudFormation
+                Version: 1
+              Configuration:
+                ActionMode: CHANGE_SET_EXECUTE
+                RoleArn: !GetAtt CloudFormationExecutionRole.Arn
+                StackName: !Sub '${ServiceName}-Stack-Gamma'
+                ChangeSetName: !Sub '${ServiceName}-ChangeSet-Gamma'
+              OutputArtifacts:
+                - Name: !Sub '${ServiceName}GammaChangeSet'
+              RunOrder: 2
+            - Name: IntegrationTests
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref StartTestsFunction
+                UserParameters: !Sub '${ServiceName}-Stack-Gamma|${ServiceName}-Stack-Tests|gamma'
+              InputArtifacts:
+                - Name: !Sub '${ServiceName}GammaChangeSet'
+              RunOrder: 3
+        - Name: Prod
+          Actions:
+            - Name: DeploymentApproval
+              ActionTypeId:
+                Category: Approval
+                Owner: AWS
+                Provider: Manual
+                Version: 1
+              RunOrder: 1
+            - Name: CreateChangeSet
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: CloudFormation
+                Version: 1
+              Configuration:
+                ActionMode: CHANGE_SET_REPLACE
+                RoleArn: !GetAtt CloudFormationExecutionRole.Arn
+                StackName: !Sub '${ServiceName}-Stack-Prod'
+                ChangeSetName: !Sub '${ServiceName}-ChangeSet-Prod'
+                TemplatePath: 'BuiltZip::app-output_sam.yaml'
+                Capabilities: CAPABILITY_IAM
+              InputArtifacts:
+                - Name: BuiltZip
+              RunOrder: 2
+            - Name: ExecuteChangeSet
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: CloudFormation
+                Version: 1
+              Configuration:
+                ActionMode: CHANGE_SET_EXECUTE
+                RoleArn: !GetAtt CloudFormationExecutionRole.Arn
+                StackName: !Sub '${ServiceName}-Stack-Prod'
+                ChangeSetName: !Sub '${ServiceName}-ChangeSet-Prod'
+              OutputArtifacts:
+                - Name: !Sub '${ServiceName}ProdChangeSet'
+              RunOrder: 3Outputs:
   LambdaName:
     Value: !Ref BackingLambdaFunction
     Description: The Lambda function
