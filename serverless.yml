@@ -11,7 +11,7 @@
 #
 # Happy Coding!
 
-service: cognito-accounts-service-echo-lambda-dev
+service: accounts-service-echo-lambda
 
 # You can pin your service to only deploy with a specific Serverless version
 # Check out our docs for more details
@@ -20,6 +20,8 @@ service: cognito-accounts-service-echo-lambda-dev
 provider:
   name: aws
   runtime: java8
+  timeout: 300
+  memorySize: 512
 
 # you can overwrite defaults here
   stage: dev
@@ -60,11 +62,11 @@ provider:
 
 # you can add packaging information here
 package:
-  artifact: target/accounts-service-0.0.1-SNAPSHOT.jar
+  artifact: target/echo-0.0.1-SNAPSHOT-lambda.zip
 
 functions:
   accountsService:
-    handler: com.workingbit.accounts.LambdaHandler::handleRequest
+    handler: com.workingbit.echo.LambdaHandler::handleRequest
 
     events:
       - http:
